@@ -1,29 +1,49 @@
-name: GitHub Actions Demo
-on: [push]
+name: bd-sig-action
+on:
+  push:
+    branches: [ main, master, develop, stage, release ]
+  pull_request:
+    branches: [ main, master, develop, stage, release ]
 jobs:
-  security:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: [ ubuntu-latest ]
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Java 11
-      uses: actions/setup-java@v2
-      with:
-        java-version: '11'
-        distribution: 'adopt'
-    
-    - name: Create Black Duck Policy
-      uses: blackducksoftware/create-policy-action@v0.0.1
-      with:
-        blackduck-url: https://saastest.app.blackduck.com
-        blackduck-api-token: Y2E4NWQ0NTMtZmVkZi00NzcyLThlZWQtM2U3YzVjMWYzZDVhOjViYTMxNmYzLWI1ZmQtNDkzMi1iNjIwLWM2YjJmOTdlMTc2Zg==
-        policy-name: 'test_actions'
-        no-fail-if-policy-exists: true
-    - name: Run Synopsys Detect
-      uses: synopsys-sig/detect-action@v0.3.2
-      env:
-        SPRING_APPLICATION_JSON: '{"detect.detector.search.depth":"10"}'
-      with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          detect-version: 7.13.2
-          blackduck-url: https://saastest.app.blackduck.com
-          blackduck-api-token: Y2E4NWQ0NTMtZmVkZi00NzcyLThlZWQtM2U3YzVjMWYzZDVhOjViYTMxNmYzLWI1ZmQtNDkzMi1iNjIwLWM2YjJmOTdlMTc2Zg==
+      - name: Checkout Source
+        uses: actions/checkout@v3
+      - name: Black Duck Full Scan
+        if: ${{ github.event_name != 'pull_request' }}
+        uses: synopsys-sig/synopsys-action@v1.5.0
+        ### Use below configuration to set specific detect environment variables
+        env:
+          DETECT_PROJECT_NAME: ${{ github.event.repository.name }}
+        with:
+          blackduck_url: ${{ secrets.BLACKDUCK_URL }}
+          blackduck_apiToken: ${{ secrets.BLACKDUCK_API_TOKEN }}
+          blackduck_scan_full: true
+          ### Accepts Multiple Values
+          blackduck_scan_failure_severities: 'BLOCKER,CRITICAL'
+          ### Uncomment below configuration to enable automatic fix pull request creation if vulnerabilities are reported
+          # blackduck_fixpr_enabled: true
+          # blackduck_fixpr_maxCount: 5
+          # blackduck_fixpr_filter_severities: 'CRITICAL,HIGH'
+          # blackduck_fixpr_useUpgradeGuidance: 'SHORT_TERM,LONG_TERM'
+          # github_token: ${{ secrets.GITHUB_TOKEN }} # Mandatory when blackduck_fixpr_enabled is set to 'true'
+          ### Uncomment below configuration if Synopsys Bridge diagnostic files needs to be uploaded
+          # include_diagnostics: true
+      - name: Black Duck PR Scan
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: synopsys-sig/synopsys-action@v1.5.0
+        ### Use below configuration to set specific detect environment variables
+        env:
+          DETECT_PROJECT_NAME: ${{ github.event.repository.name }}
+          DETECT_BLACKDUCK_RAPID_COMPARE_MODE: ALL
+        with:
+          blackduck_url: ${{ secrets.BLACKDUCK_URL }}
+          blackduck_apiToken: ${{ secrets.BLACKDUCK_API_TOKEN }}
+          blackduck_scan_full: false
+          ### Below configuration is used to enable automatic pull request comment based on Black Duck scan result
+          blackduck_automation_prcomment: true
+          DETECT_BLACKDUCK_RAPID_COMPARE_MODE: ALL
+          github_token: ${{ secrets.GITHUB_TOKEN }} # Mandatory when blackduck_automation_prcomment is set to 'true'
+          ### Uncomment below configuration if Synopsys Bridge diagnostic files needs to be uploaded
+          # include_diagnostics: true
